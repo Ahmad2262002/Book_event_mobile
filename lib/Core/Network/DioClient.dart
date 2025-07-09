@@ -21,6 +21,11 @@ class DioClient {
   DateTime? _lastFailureTime;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
+  // Base URL configuration
+  static const String _localBaseUrl = 'http://localhost/alighaderfyp/api';
+  static const String _networkBaseUrl = 'http://172.20.10.3:8000/api';
+  bool _useLocalBaseUrl = false;
+
   DioClient({
     this.token,
     Duration? connectTimeout,
@@ -30,16 +35,25 @@ class DioClient {
     Duration? retryDelay,
     bool? enableCircuitBreaker,
     Duration? circuitBreakerCooldown,
+    bool? useLocalBaseUrl,
   })  : _connectTimeout = connectTimeout ?? const Duration(seconds: 45),
         _receiveTimeout = receiveTimeout ?? const Duration(seconds: 45),
         _sendTimeout = sendTimeout ?? const Duration(seconds: 45),
         _maxRetries = maxRetries ?? 3,
         _retryDelay = retryDelay ?? const Duration(seconds: 2),
         _enableCircuitBreaker = enableCircuitBreaker ?? true,
-        _circuitBreakerCooldown = circuitBreakerCooldown ?? const Duration(minutes: 1) {
+        _circuitBreakerCooldown = circuitBreakerCooldown ?? const Duration(minutes: 1),
+        _useLocalBaseUrl = useLocalBaseUrl ?? false {
     _initDio();
     _checkInitialConnectivity();
     _startConnectivityMonitoring();
+  }
+
+  String get baseUrl => _useLocalBaseUrl ? _localBaseUrl : _networkBaseUrl;
+
+  void toggleBaseUrl(bool useLocal) {
+    _useLocalBaseUrl = useLocal;
+    _initDio(); // Reinitialize Dio with new base URL
   }
 
   Dio get instance => _dio;
@@ -47,7 +61,7 @@ class DioClient {
   void _initDio() {
     _dio = Dio(
       BaseOptions(
-        baseUrl: 'http://172.20.10.3:8000/api',
+        baseUrl: baseUrl,
         connectTimeout: _connectTimeout,
         receiveTimeout: _receiveTimeout,
         sendTimeout: _sendTimeout,
@@ -58,10 +72,80 @@ class DioClient {
       ),
     );
 
-    _dio.interceptors.addAll([
-      _createRetryInterceptor(),
-      if (kDebugMode) _createLoggerInterceptor(),
-    ]);
+    _dio.interceptors.add(InterceptorsWrapper(
+      onError: (error, handler) async {
+        // If connection fails with local URL, try switching to network URL
+        if (error.type == DioExceptionType.connectionError &&
+            baseUrl == _localBaseUrl) {
+          if (kDebugMode) {
+            print('🔄 Local connection failed, trying network URL...');
+          }
+          toggleBaseUrl(false);
+          try {
+            final response = await _dio.request(
+              error.requestOptions.path,
+              data: error.requestOptions.data,
+              options: Options(
+                method: error.requestOptions.method,
+                headers: error.requestOptions.headers,
+              ),
+            );
+            return handler.resolve(response);
+          } catch (e) {
+            return handler.next(error);
+          }
+        }
+        return handler.next(error);
+      },
+    ));
+
+    if (kDebugMode) {
+      _dio.interceptors.add(PrettyDioLogger(
+        requestHeader: true,
+        requestBody: true,
+        responseBody: true,
+        error: true,
+        compact: true,
+      ));
+    }
+
+    _dio.interceptors.add(_createRetryInterceptor());
+  }
+
+  Future<void> autoDetectBaseUrl() async {
+    try {
+      // First try the network URL
+      toggleBaseUrl(false);
+      final testResponse = await _dio.get(
+        '/test-connection',
+        options: Options(
+          headers: _getJsonHeaders(),
+          receiveTimeout: const Duration(seconds: 3),
+        ),
+      );
+
+      if (testResponse.statusCode != 200) {
+        throw Exception('Network URL failed');
+      }
+    } catch (e) {
+      // If network fails, try local URL
+      toggleBaseUrl(true);
+      try {
+        final testResponse = await _dio.get(
+          '/test-connection',
+          options: Options(
+            headers: _getJsonHeaders(),
+            receiveTimeout: const Duration(seconds: 3),
+          ),
+        );
+
+        if (testResponse.statusCode != 200) {
+          throw Exception('Both URLs failed');
+        }
+      } catch (e) {
+        throw Exception('Could not connect to any API endpoint');
+      }
+    }
   }
 
   Map<String, String> _getDefaultHeaders() {
@@ -73,8 +157,6 @@ class DioClient {
     };
   }
 
-  // ==================== HEADER HELPERS ====================
-
   Map<String, String> _getJsonHeaders() {
     return {
       ..._getDefaultHeaders(),
@@ -85,11 +167,8 @@ class DioClient {
   Map<String, String> _getMultipartHeaders() {
     return {
       ..._getDefaultHeaders(),
-      // Content-Type will be set automatically by Dio with boundary
     };
   }
-
-  // ==================== API METHODS ====================
 
   Future<ApiResponse<T>> get<T>(
       String path, {
@@ -176,15 +255,18 @@ class DioClient {
         path,
         data: formData,
         onSendProgress: onSendProgress,
-        options: Options(headers: _getMultipartHeaders()),
+        options: Options(
+          headers: {
+            ..._getDefaultHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
       );
       return _parseResponse<T>(response, fromJsonT);
     } on DioException catch (e) {
       return _handleError<T>(e);
     }
   }
-
-  // ==================== RESPONSE HANDLING ====================
 
   ApiResponse<T> _parseResponse<T>(
       Response response,
@@ -193,10 +275,46 @@ class DioClient {
     try {
       final responseData = response.data;
       if (responseData is Map<String, dynamic>) {
-        // Handle both response formats:
-        // 1. With success flag: {"success": true, "data": {...}, "message": ""}
-        // 2. Direct data response: {"id": 1, "title": "Event", ...}
+        // Special handling for stats endpoint
+        if (response.requestOptions.path.contains('/admin/stats')) {
+          final statsData = responseData['stats'] ?? responseData;
+          return ApiResponse<T>(
+            success: responseData['success'] ?? false,
+            message: responseData['message'],
+            data: fromJsonT(_convertStringNumbers(statsData)),
+          );
+        }
+
+        // Handle all possible response formats
         if (responseData.containsKey('success')) {
+          // First try to find data in known custom fields
+          if (responseData.containsKey('events')) {
+            return ApiResponse<T>(
+              success: responseData['success'] ?? false,
+              message: responseData['message'],
+              data: fromJsonT({'events': responseData['events']}),
+            );
+          } else if (responseData.containsKey('bookings')) {
+            return ApiResponse<T>(
+              success: responseData['success'] ?? false,
+              message: responseData['message'],
+              data: fromJsonT({'bookings': responseData['bookings']}),
+            );
+          } else if (responseData.containsKey('users')) {
+            return ApiResponse<T>(
+              success: responseData['success'] ?? false,
+              message: responseData['message'],
+              data: fromJsonT({'users': responseData['users']}),
+            );
+          } else if (responseData.containsKey('testimonials')) {
+            return ApiResponse<T>(
+              success: responseData['success'] ?? false,
+              message: responseData['message'],
+              data: fromJsonT({'testimonials': responseData['testimonials']}),
+            );
+          }
+
+          // Fall back to standard "data" field
           return ApiResponse<T>(
             success: responseData['success'] ?? false,
             message: responseData['message'],
@@ -205,6 +323,7 @@ class DioClient {
                 : null,
           );
         } else {
+          // Direct data response
           return ApiResponse<T>(
             success: true,
             data: fromJsonT(responseData),
@@ -224,6 +343,21 @@ class DioClient {
     }
   }
 
+  Map<String, dynamic> _convertStringNumbers(Map<String, dynamic> data) {
+    return data.map((key, value) {
+      if (value is String) {
+        // Try to parse as int first
+        final intValue = int.tryParse(value);
+        if (intValue != null) return MapEntry(key, intValue);
+
+        // Then try as double
+        final doubleValue = double.tryParse(value);
+        if (doubleValue != null) return MapEntry(key, doubleValue);
+      }
+      return MapEntry(key, value);
+    });
+  }
+
   ApiResponse<T> _handleError<T>(DioException e) {
     if (e.type == DioExceptionType.connectionError) {
       _activateCircuitBreaker();
@@ -233,7 +367,7 @@ class DioClient {
       try {
         return ApiResponse<T>.fromJson(
           e.response?.data ?? {},
-              (json) => null as T, // Cast to T, will be null anyway
+              (json) => null as T,
         );
       } catch (_) {
         return ApiResponse<T>(
@@ -248,8 +382,6 @@ class DioClient {
       );
     }
   }
-
-  // ==================== NETWORK MANAGEMENT ====================
 
   Future<void> _checkInitialConnectivity() async {
     try {
@@ -370,18 +502,6 @@ class DioClient {
           return handler.next(error);
         }
       },
-    );
-  }
-
-  PrettyDioLogger _createLoggerInterceptor() {
-    return PrettyDioLogger(
-      requestHeader: true,
-      requestBody: true,
-      responseBody: true,
-      responseHeader: false,
-      error: true,
-      compact: true,
-      maxWidth: 90,
     );
   }
 

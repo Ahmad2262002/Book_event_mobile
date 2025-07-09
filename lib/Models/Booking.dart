@@ -11,6 +11,10 @@ class Booking {
   final DateTime? startDate;
   final String? location;
   final double? price;
+  // New fields for admin view
+  final String? userName;
+  final String? userEmail;
+
 
   Booking({
     required this.id,
@@ -24,6 +28,8 @@ class Booking {
     this.startDate,
     this.location,
     this.price,
+    this.userName,
+    this.userEmail,
   });
 
   factory Booking.fromJson(Map<String, dynamic> json) {
@@ -43,6 +49,9 @@ class Booking {
       price: json['price'] != null
           ? double.tryParse(json['price'].toString()) ?? 0
           : null,
+      // Parse new fields (will be null for regular users)
+      userName: json['user_name'] as String?,
+      userEmail: json['user_email'] as String?,
     );
   }
 

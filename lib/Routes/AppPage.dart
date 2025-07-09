@@ -24,13 +24,13 @@ class AppPage {
       page: () => Registration(),
       binding: RegistrationBinding(),
     ),
-    // GetPage(
-    //   name: AppRoute.home,
-    //   page: () => Home(),
-    //   binding: HomeBinding(),
-    // ),
     GetPage(
-      name: AppRoute.AminHome,
+      name: AppRoute.Home,
+      page: () => Home(),
+      binding: HomeBinding(),
+    ),
+    GetPage(
+      name: AppRoute.AdminHome,
       page: () => AdminHome(),
       binding: AdminHomeBinding(),
     ),

@@ -1,23 +1,27 @@
 import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:book_event/Routes/AppRoute.dart';
 import '../Core/Network/DioClient.dart';
-import '../Core/showSuccessDialog.dart';
-import '../Core/showErrorDialog.dart';
-import '../Routes/AppRoute.dart';
 
 class RegistrationController extends GetxController {
-  // Controllers
-  final TextEditingController fullName = TextEditingController();
-  final TextEditingController email = TextEditingController();
-  final TextEditingController phone = TextEditingController();
-  final TextEditingController password = TextEditingController();
-  final TextEditingController passwordConfirm = TextEditingController();
+  // Form controllers
+  final fullName = TextEditingController();
+  final email = TextEditingController();
+  final phone = TextEditingController();
+  final password = TextEditingController();
+  final passwordConfirm = TextEditingController();
 
-  // State
-  var isLoading = false.obs;
-  var showEmailScreen = true.obs;
+  // State variables
+  final isLoading = false.obs;
+  final errorMessage = ''.obs;
+  final isPasswordVisible = false.obs;
+  final isConfirmPasswordVisible = false.obs;
+
+  // Dio client instance
+  final DioClient _dioClient = Get.find<DioClient>();
 
   @override
   void onClose() {
@@ -29,97 +33,116 @@ class RegistrationController extends GetxController {
     super.onClose();
   }
 
-  bool _validateEmail(String email) {
-    final regex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    return regex.hasMatch(email);
-  }
+  // Validation logic
+  bool validateForm() {
+    errorMessage.value = '';
 
-  Future<void> registerUser() async {
-    if (isLoading.value) return;
-
-    // Validate all fields
     if (fullName.text.isEmpty) {
-      showErrorDialog("Name Required", "Please enter your full name");
-      return;
+      errorMessage.value = 'Please enter your full name';
+      return false;
     }
 
-    if (email.text.isEmpty || !_validateEmail(email.text)) {
-      showErrorDialog("Invalid Email", "Please enter a valid email address");
-      return;
+    if (email.text.isEmpty || !GetUtils.isEmail(email.text)) {
+      errorMessage.value = 'Please enter a valid email';
+      return false;
     }
 
     if (phone.text.isEmpty) {
-      showErrorDialog("Phone Required", "Please enter your phone number");
-      return;
+      errorMessage.value = 'Please enter your phone number';
+      return false;
     }
 
-    if (password.text.length < 8) {
-      showErrorDialog(
-        "Weak Password",
-        "Password must be at least 8 characters long",
-      );
-      return;
+    if (password.text.isEmpty || password.text.length < 8) {
+      errorMessage.value = 'Password must be at least 8 characters';
+      return false;
     }
 
     if (password.text != passwordConfirm.text) {
-      showErrorDialog(
-        "Password Mismatch",
-        "The passwords you entered don't match",
-      );
-      return;
+      errorMessage.value = 'Passwords do not match';
+      return false;
     }
 
+    return true;
+  }
+
+  // Registration API call with hardcoded "user" role
+  Future<void> registerUser() async {
+    if (!validateForm()) return;
+
     isLoading.value = true;
+    errorMessage.value = '';
+
     try {
-      final response = await DioClient().instance.post(
+      final response = await _dioClient.post(
         '/register',
         data: {
           'full_name': fullName.text.trim(),
           'email': email.text.trim(),
           'phone': phone.text.trim(),
-          'password': password.text.trim(),
-          'role': 'user', // Explicitly set role as 'user'
+          'password': password.text,
+          'role': 'user', // Hardcoded role
         },
-      );
+        fromJsonT: (json) => json,
+      ).timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _handleRegistrationSuccess(response.data);
+      if (response.success) {
+        Get.offNamed(AppRoute.login);
+        Get.snackbar(
+          'Success',
+          'Registration successful! Please login',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
       } else {
-        showErrorDialog(
-          "Registration Failed",
-          response.data['message'] ?? "Couldn't complete registration",
+        errorMessage.value = response.message ?? 'Registration failed';
+        Get.snackbar(
+          'Error',
+          errorMessage.value,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
         );
       }
+    } on TimeoutException {
+      errorMessage.value = 'Request timed out';
+      Get.snackbar(
+        'Error',
+        'Connection timeout. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     } on DioException catch (e) {
-      _handleDioError(e);
+      errorMessage.value = e.response?.data?['message'] ??
+          e.message ??
+          'Registration failed';
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     } catch (e) {
-      showErrorDialog("Error", "Something went wrong. Please try again.");
+      errorMessage.value = 'An unexpected error occurred';
+      Get.snackbar(
+        'Error',
+        errorMessage.value,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     } finally {
       isLoading.value = false;
     }
   }
 
-  void _handleRegistrationSuccess(Map<String, dynamic> responseData) {
-    showSuccessDialog(
-      "Registration Complete!",
-      "Your account has been successfully created",
-          () {
-        Get.offAllNamed(AppRoute.login);
-      },
-    );
+  void togglePasswordVisibility() {
+    isPasswordVisible.value = !isPasswordVisible.value;
   }
 
-  void _handleDioError(DioException e) {
-    final response = e.response;
-    if (response != null) {
-      final errorMessage = response.data['message'] ??
-          "An error occurred (${response.statusCode})";
-      showErrorDialog("Error", errorMessage.toString());
-    } else {
-      showErrorDialog(
-          "Connection Error",
-          "Network Issue 🌐, Please check your internet connection and try again"
-      );
-    }
+  void toggleConfirmPasswordVisibility() {
+    isConfirmPasswordVisible.value = !isConfirmPasswordVisible.value;
   }
 }

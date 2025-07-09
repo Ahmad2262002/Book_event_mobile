@@ -5,9 +5,11 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
+
   sdk: '>=3.3.4 <4.0.0'
 
 dependencies:
+  printing: ^5.10.0
   cookie_jar: ^4.0.0
   dio_cookie_manager: ^3.0.0
   #  flutter_universal_links: ^1.1.1
@@ -52,17 +54,16 @@ dev_dependencies:
 # Flutter configuration
 flutter:
   assets:
-#    - assets/animations/news_loading.json
+    - assets/animations/startup_animation.json
+    - assets/icons/icon.png
 
   uses-material-design: true
 
-  # Add your assets here (if any)
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+
 
 # Flutter Launcher Icons configuration
 flutter_icons:
   android: true
   ios: true
-#  image_path: "assets/icons/icon.jpeg" # Path to your 1024x1024 icon
+  image_path: "assets/icons/icon.png"  # Your path
+  adaptive_icon_background: "#FFFFFF"  # Optional background color
