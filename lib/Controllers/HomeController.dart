@@ -27,6 +27,13 @@ class HomeController extends GetxController {
   final _profilePicturePath = ''.obs;
   final testimonialController = TextEditingController();
 
+  // Add these in HomeController.dart
+  final isProfileLoading = false.obs;
+  final profileFormKey = GlobalKey<FormState>();
+  final fullNameController = TextEditingController();
+  final emailController = TextEditingController();
+  final phoneController = TextEditingController();
+
   String? get profilePicturePath => _profilePicturePath.value.isEmpty ? null : _profilePicturePath.value;
   set profilePicturePath(String? value) => _profilePicturePath.value = value ?? '';
 
@@ -43,12 +50,73 @@ class HomeController extends GetxController {
       await getBookings();
       await getTestimonials();
 
+      // Initialize profile controllers with current values
+      fullNameController.text = userProfile['full_name'] ?? '';
+      emailController.text = userProfile['email'] ?? '';
+      phoneController.text = userProfile['phone'] ?? '';
+
+
       _timer = Timer.periodic(const Duration(minutes: 1), (timer) async {
         await getEvents();
         await getBookings();
       });
     } catch (e) {
       Get.snackbar('Initialization Error', 'Failed to initialize: ${e.toString()}');
+    }
+  }
+
+  Future<void> updateProfile() async {
+    try {
+      isProfileLoading(true);
+
+      if (!profileFormKey.currentState!.validate()) {
+        return;
+      }
+
+      final userId = userProfile['id'];
+      if (userId == null) throw 'User not authenticated';
+
+      final dioClient = DioClient(token: prefs.getString('token'));
+      final response = await dioClient.put<bool>(
+        '/users/$userId',
+        data: {
+          'full_name': fullNameController.text,
+          'email': emailController.text,
+          'phone': phoneController.text,
+        },
+        fromJsonT: (json) => true,
+      );
+
+      if (response.success) {
+        // Update local profile data
+        userProfile['full_name'] = fullNameController.text;
+        userProfile['email'] = emailController.text;
+        userProfile['phone'] = phoneController.text;
+
+        // Save to shared preferences
+        await prefs.setString('user', jsonEncode(userProfile));
+
+        Get.back(); // Close the update profile dialog
+        Get.snackbar(
+          'Success',
+          'Profile updated successfully',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      } else {
+        throw Exception(response.message ?? 'Failed to update profile');
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'Failed to update profile: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isProfileLoading(false);
     }
   }
 

@@ -549,23 +549,19 @@ class AdminHomeController extends GetxController {
         );
         return true;
       } else {
-        Get.snackbar(
-          'Error',
-          response.message ?? 'Failed to delete user',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        // Only show snackbar if there's a specific error message
+        if (response.message != null && response.message!.isNotEmpty) {
+          Get.snackbar(
+            'Error',
+            response.message!,
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+          );
+        }
         return false;
       }
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to delete user',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
       return false;
     } finally {
       isLoading(false);
@@ -855,18 +851,26 @@ class AdminHomeController extends GetxController {
         'price': price.toString(),
         'total_seats': totalSeats.toString(),
         '_method': 'PUT',
-        if (imagePath != null)
-          'image': await MultipartFile.fromFile(
+      });
+
+      // Only add image if it's a new file path (not a URL)
+      if (imagePath != null && !imagePath.startsWith('http')) {
+        formData.files.add(MapEntry(
+          'image',
+          await MultipartFile.fromFile(
             imagePath,
             filename: 'event_${DateTime.now().millisecondsSinceEpoch}${path.extension(imagePath)}',
             contentType: MediaType('image', path.extension(imagePath).replaceAll('.', '')),
           ),
-      });
+        ));
+      } else if (imagePath == null) {
+        // Explicitly indicate to keep existing image
+        formData.fields.add(MapEntry('keep_image', 'true'));
+      }
 
-      // Use the existing dioClient instead of creating a new Dio instance
       final dioClient = DioClient(token: token);
       final response = await dioClient.upload<Map<String, dynamic>>(
-        '/events/$eventId',  // This should match your API endpoint
+        '/events/$eventId',
         formData: formData,
         fromJsonT: (json) => json,
       ).timeout(const Duration(seconds: 30));
@@ -880,7 +884,7 @@ class AdminHomeController extends GetxController {
         return false;
       }
     } catch (e) {
-      // Error handling remains the same
+      Get.snackbar('Error', 'Failed to update event: ${e.toString()}');
       return false;
     } finally {
       isLoading(false);

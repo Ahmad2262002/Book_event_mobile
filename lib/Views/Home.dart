@@ -117,7 +117,7 @@ class Home extends StatelessWidget {
                 ),
                 Expanded(
                   child: IndexedStack(
-                    index: controller.currentTabIndex.value,
+                    index: controller.currentTabIndex.value.clamp(0, 2), // Ensure index is between 0-2
                     children: [
                       _buildEventsTab(context, controller, cardColor, textColor, primaryColor),
                       _buildBookingsTab(context, controller, cardColor, textColor, primaryColor),
@@ -812,6 +812,7 @@ class Home extends StatelessWidget {
                     color: textColor,
                   ),
                 ),
+
                 const SizedBox(height: 8),
                 Text(
                   'Manage your bookings',
@@ -822,6 +823,23 @@ class Home extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          // Update Profile item
+          ListTile(
+            leading: Icon(
+              Icons.person,
+              color: textColor.withOpacity(0.8),
+            ),
+            title: Text(
+              'Update Profile',
+              style: TextStyle(
+                color: textColor,
+              ),
+            ),
+            onTap: () {
+              Navigator.pop(context); // Close drawer first
+              _showUpdateProfileDialog(context, controller, cardColor, textColor, primaryColor);
+            },
           ),
           _buildDrawerItem(
             context,
@@ -1267,93 +1285,293 @@ class Home extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Share Your Experience",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller.testimonialController,
-                style: TextStyle(color: textColor),
-                maxLines: 5,
-                decoration: InputDecoration(
-                  hintText: "Tell us about your experience...",
-                  hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: textColor.withOpacity(0.2)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: textColor.withOpacity(0.2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: primaryColor),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7, // Limit height
+          ),
+          child: SingleChildScrollView( // Make it scrollable
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min, // Important for scrollable content
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: primaryColor),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Text(
-                        "Cancel",
-                        style: TextStyle(
-                          color: primaryColor,
-                        ),
-                      ),
+                  Text(
+                    "Share Your Experience",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        controller.submitTestimonial();
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller.testimonialController,
+                    style: TextStyle(color: textColor),
+                    maxLines: 5,
+                    decoration: InputDecoration(
+                      hintText: "Tell us about your experience...",
+                      hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
                       ),
-                      child: const Text(
-                        "Submit",
-                        style: TextStyle(
-                          color: Colors.white,
-                        ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
                       ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: primaryColor),
+                      ),
+                      filled: true,
+                      fillColor: cardColor.withOpacity(0.8),
                     ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: primaryColor),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            "Cancel",
+                            style: TextStyle(
+                              color: primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            controller.submitTestimonial();
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text(
+                            "Submit",
+                            style: TextStyle(
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  void _showUpdateProfileDialog(
+      BuildContext context,
+      HomeController controller,
+      Color cardColor,
+      Color textColor,
+      Color primaryColor,
+      ) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: controller.profileFormKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Update Profile",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Full Name Field
+                  Text(
+                    "Full Name",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: controller.fullNameController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: "Enter your full name",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                      ),
+                      filled: true,
+                      fillColor: cardColor.withOpacity(0.8),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your full name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Email Field
+                  Text(
+                    "Email",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: controller.emailController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: "Enter your email",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                      ),
+                      filled: true,
+                      fillColor: cardColor.withOpacity(0.8),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!value.contains('@')) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Phone Field
+                  Text(
+                    "Phone",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: controller.phoneController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: "Enter your phone number",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                      ),
+                      filled: true,
+                      fillColor: cardColor.withOpacity(0.8),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your phone number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: primaryColor),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            "Cancel",
+                            style: TextStyle(
+                              color: primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Obx(() => ElevatedButton(
+                          onPressed: controller.isProfileLoading.value
+                              ? null
+                              : () => controller.updateProfile(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: controller.isProfileLoading.value
+                              ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : const Text(
+                            "Update",
+                            style: TextStyle(
+                              color: Colors.white,
+                            ),
+                          ),
+                        )),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {

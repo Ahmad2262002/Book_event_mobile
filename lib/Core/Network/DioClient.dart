@@ -72,14 +72,24 @@ class DioClient {
       ),
     );
 
+    // Remove or modify the PrettyDioLogger configuration
+    if (kDebugMode) {
+      // Only show minimal logs in debug mode
+      _dio.interceptors.add(PrettyDioLogger(
+        requestHeader: false,  // Disable request headers
+        requestBody: false,    // Disable request body
+        responseBody: false,   // Disable response body
+        error: false,          // Disable error logs
+        compact: true,
+      ));
+    }
+
+    // Keep other interceptors
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (error, handler) async {
-        // If connection fails with local URL, try switching to network URL
+        // Your existing error handling
         if (error.type == DioExceptionType.connectionError &&
             baseUrl == _localBaseUrl) {
-          if (kDebugMode) {
-            print('🔄 Local connection failed, trying network URL...');
-          }
           toggleBaseUrl(false);
           try {
             final response = await _dio.request(
@@ -98,16 +108,6 @@ class DioClient {
         return handler.next(error);
       },
     ));
-
-    if (kDebugMode) {
-      _dio.interceptors.add(PrettyDioLogger(
-        requestHeader: true,
-        requestBody: true,
-        responseBody: true,
-        error: true,
-        compact: true,
-      ));
-    }
 
     _dio.interceptors.add(_createRetryInterceptor());
   }
@@ -372,13 +372,13 @@ class DioClient {
       } catch (_) {
         return ApiResponse<T>(
           success: false,
-          message: e.message ?? 'Request failed',
+          message: 'Request failed',
         );
       }
     } else {
       return ApiResponse<T>(
         success: false,
-        message: e.message ?? 'Network error occurred',
+        message: 'Network error occurred',
       );
     }
   }

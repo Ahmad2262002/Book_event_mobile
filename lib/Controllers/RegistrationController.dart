@@ -1,148 +1,153 @@
 import 'dart:async';
-
-import 'package:dio/dio.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:book_event/Routes/AppRoute.dart';
+import 'package:get/get.dart' hide FormData, MultipartFile, Response;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../Core/Network/DioClient.dart';
+import '../Routes/AppRoute.dart';
 
 class RegistrationController extends GetxController {
-  // Form controllers
+  final isLoading = false.obs;
+  final agreeToTerms = false.obs;
+  final isPasswordVisible = false.obs;
+  final isConfirmPasswordVisible = false.obs;
+
   final fullName = TextEditingController();
   final email = TextEditingController();
   final phone = TextEditingController();
   final password = TextEditingController();
   final passwordConfirm = TextEditingController();
 
-  // State variables
-  final isLoading = false.obs;
-  final errorMessage = ''.obs;
-  final isPasswordVisible = false.obs;
-  final isConfirmPasswordVisible = false.obs;
+  void togglePasswordVisibility() => isPasswordVisible.toggle();
+  void toggleConfirmPasswordVisibility() => isConfirmPasswordVisible.toggle();
 
-  // Dio client instance
-  final DioClient _dioClient = Get.find<DioClient>();
+  // Validation messages with emojis
+  final validationMessages = {
+    'fullName': '👤 Please enter your full name',
+    'email': '📧 Please enter a valid email',
+    'phone': '📱 Please enter a valid phone number (10-15 digits)',
+    'password': '🔒 Password must be at least 8 characters',
+    'passwordMatch': '🔑 Passwords do not match',
+    'terms': '📝 Please accept the terms and conditions',
+  };
 
-  @override
-  void onClose() {
-    fullName.dispose();
-    email.dispose();
-    phone.dispose();
-    password.dispose();
-    passwordConfirm.dispose();
-    super.onClose();
+  String? validateFullName(String? value) {
+    if (value == null || value.isEmpty) {
+      return validationMessages['fullName'];
+    }
+    if (value.length < 3) {
+      return '👤 Name too short (min 3 characters)';
+    }
+    return null;
   }
 
-  // Validation logic
-  bool validateForm() {
-    errorMessage.value = '';
-
-    if (fullName.text.isEmpty) {
-      errorMessage.value = 'Please enter your full name';
-      return false;
+  String? validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return validationMessages['email'];
     }
-
-    if (email.text.isEmpty || !GetUtils.isEmail(email.text)) {
-      errorMessage.value = 'Please enter a valid email';
-      return false;
+    if (!GetUtils.isEmail(value)) {
+      return validationMessages['email'];
     }
-
-    if (phone.text.isEmpty) {
-      errorMessage.value = 'Please enter your phone number';
-      return false;
-    }
-
-    if (password.text.isEmpty || password.text.length < 8) {
-      errorMessage.value = 'Password must be at least 8 characters';
-      return false;
-    }
-
-    if (password.text != passwordConfirm.text) {
-      errorMessage.value = 'Passwords do not match';
-      return false;
-    }
-
-    return true;
+    return null;
   }
 
-  // Registration API call with hardcoded "user" role
+  String? validatePhone(String? value) {
+    if (value == null || value.isEmpty) {
+      return validationMessages['phone'];
+    }
+    if (!RegExp(r'^[0-9]{10,15}$').hasMatch(value)) {
+      return validationMessages['phone'];
+    }
+    return null;
+  }
+
+  String? validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return validationMessages['password'];
+    }
+    if (value.length < 8) {
+      return validationMessages['password'];
+    }
+    return null;
+  }
+
+  String? validatePasswordConfirm(String? value) {
+    if (value == null || value.isEmpty) {
+      return '🔑 Please confirm your password';
+    }
+    if (value != password.text) {
+      return validationMessages['passwordMatch'];
+    }
+    return null;
+  }
+
   Future<void> registerUser() async {
-    if (!validateForm()) return;
-
-    isLoading.value = true;
-    errorMessage.value = '';
-
     try {
-      final response = await _dioClient.post(
+      isLoading(true);
+
+      final dioClient = DioClient();
+      final response = await dioClient.post<Map<String, dynamic>>(
         '/register',
         data: {
           'full_name': fullName.text.trim(),
           'email': email.text.trim(),
           'phone': phone.text.trim(),
           'password': password.text,
-          'role': 'user', // Hardcoded role
         },
-        fromJsonT: (json) => json,
-      ).timeout(const Duration(seconds: 30));
+        fromJsonT: (json) => json as Map<String, dynamic>,
+      );
 
       if (response.success) {
-        Get.offNamed(AppRoute.login);
+        // Save user data and token
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', response.data?['token'] ?? '');
+        await prefs.setString('user', jsonEncode(response.data?['user']));
+
+        // Show success and navigate
         Get.snackbar(
-          'Success',
-          'Registration successful! Please login',
+          '🎉 Registration Successful!',
+          'Welcome to our app!',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.green,
           colorText: Colors.white,
         );
+        await Future.delayed(Duration(seconds: 1));
+        Get.offAllNamed(AppRoute.login);
       } else {
-        errorMessage.value = response.message ?? 'Registration failed';
-        Get.snackbar(
-          'Error',
-          errorMessage.value,
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        throw Exception(response.message ?? 'Registration failed');
       }
-    } on TimeoutException {
-      errorMessage.value = 'Request timed out';
-      Get.snackbar(
-        'Error',
-        'Connection timeout. Please try again.',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-    } on DioException catch (e) {
-      errorMessage.value = e.response?.data?['message'] ??
-          e.message ??
-          'Registration failed';
-      Get.snackbar(
-        'Error',
-        errorMessage.value,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
     } catch (e) {
-      errorMessage.value = 'An unexpected error occurred';
       Get.snackbar(
-        'Error',
-        errorMessage.value,
+        '❌ Registration Failed',
+        _getErrorMessage(e),
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
     } finally {
-      isLoading.value = false;
+      isLoading(false);
     }
   }
 
-  void togglePasswordVisibility() {
-    isPasswordVisible.value = !isPasswordVisible.value;
+  String _getErrorMessage(dynamic error) {
+    if (error.toString().contains('email already exists')) {
+      return '📧 This email is already registered';
+    } else if (error.toString().contains('phone already exists')) {
+      return '📱 This phone number is already registered';
+    } else if (error.toString().contains('network')) {
+      return '📡 Network error - please check your connection';
+    }
+    return error.toString();
   }
 
-  void toggleConfirmPasswordVisibility() {
-    isConfirmPasswordVisible.value = !isConfirmPasswordVisible.value;
+  @override
+  void onClose() {
+    // Clear controllers but don't dispose them to prevent the error
+    fullName.clear();
+    email.clear();
+    phone.clear();
+    password.clear();
+    passwordConfirm.clear();
+    super.onClose();
   }
 }
