@@ -35,6 +35,12 @@ class AdminHomeController extends GetxController {
   var isDarkMode = false.obs;
   Timer? _refreshTimer;
 
+  final isProfileLoading = false.obs;
+  final profileFormKey = GlobalKey<FormState>();
+  final fullNameController = TextEditingController();
+  final emailController = TextEditingController();
+  final phoneController = TextEditingController();
+
   // In AdminHomeController.dart, modify onInit
   @override
   void onInit() async {
@@ -44,6 +50,8 @@ class AdminHomeController extends GetxController {
       prefs = await SharedPreferences.getInstance();
       log('🔑 SharedPreferences loaded successfully');
       isDarkMode.value = prefs.getBool('darkMode') ?? false;
+      // Load admin profile
+      await loadAdminProfile();
 
       // Add this line to set initial theme
       Get.changeThemeMode(isDarkMode.value ? ThemeMode.dark : ThemeMode.light);
@@ -127,6 +135,9 @@ class AdminHomeController extends GetxController {
               rethrow;
             }
           }).toList();
+
+          // Sort events by startDate in descending order (newest first)
+          eventsList.sort((a, b) => b.startDate.compareTo(a.startDate));
 
           log('📊 Total events parsed: ${eventsList.length}');
           return eventsList;
@@ -888,6 +899,86 @@ class AdminHomeController extends GetxController {
       return false;
     } finally {
       isLoading(false);
+    }
+  }
+
+  // Add this method to load admin profile
+  Future<void> loadAdminProfile() async {
+    try {
+      final userData = prefs.getString('user');
+      if (userData != null) {
+        final user = jsonDecode(userData);
+        fullNameController.text = user['full_name'] ?? '';
+        emailController.text = user['email'] ?? '';
+        phoneController.text = user['phone'] ?? '';
+      }
+    } catch (e) {
+      log('❌ Error loading admin profile: $e', error: e);
+    }
+  }
+
+// Add this method to update admin profile
+  Future<bool> updateAdminProfile() async {
+    try {
+      isProfileLoading(true);
+
+      if (!profileFormKey.currentState!.validate()) {
+        return false;
+      }
+
+      final token = prefs.getString('token');
+      if (token == null) throw 'Authentication required';
+
+      final userJson = prefs.getString('user');
+      if (userJson == null) throw 'User data not available';
+
+      final user = jsonDecode(userJson);
+      final userId = user['id'];
+      if (userId == null) throw 'User ID not available';
+
+      final dioClient = DioClient(token: token);
+      final response = await dioClient.put<bool>(
+        '/users/$userId',
+        data: {
+          'full_name': fullNameController.text,
+          'email': emailController.text,
+          'phone': phoneController.text,
+        },
+        fromJsonT: (json) => true,
+      );
+
+      if (response.success) {
+        // Update local user data
+        user['full_name'] = fullNameController.text;
+        user['email'] = emailController.text;
+        user['phone'] = phoneController.text;
+
+        // Save to shared preferences
+        await prefs.setString('user', jsonEncode(user));
+
+        Get.snackbar(
+          'Success',
+          'Profile updated successfully',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        return true;
+      } else {
+        throw Exception(response.message ?? 'Failed to update profile');
+      }
+    } catch (e) {
+      log('❌ Error updating admin profile: $e', error: e);
+      Get.snackbar(
+        'Error',
+        'Failed to update profile: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return false;
+    } finally {
+      isProfileLoading(false);
     }
   }
 }

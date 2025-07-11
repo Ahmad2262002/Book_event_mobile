@@ -166,6 +166,23 @@ class AdminHome extends StatelessWidget {
               ],
             ),
           ),
+          // Add this ListTile for profile update
+          ListTile(
+            leading: Icon(
+              Icons.person,
+              color: textColor.withOpacity(0.8),
+            ),
+            title: Text(
+              'Update Profile',
+              style: TextStyle(
+                color: textColor,
+              ),
+            ),
+            onTap: () {
+              Navigator.pop(context); // Close drawer first
+              _showUpdateProfileDialog(context, isDarkMode, cardColor, textColor, primaryColor);
+            },
+          ),
           _buildDrawerItem(
             context,
             Icons.event,
@@ -2397,6 +2414,198 @@ class AdminHome extends StatelessWidget {
       },
     );
   }
+
+  // Add this method to show the update profile dialog
+  void _showUpdateProfileDialog(BuildContext context, bool isDarkMode, Color cardColor, Color textColor, Color primaryColor) {
+    final controller = Get.find<AdminHomeController>();
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: controller.profileFormKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Update Profile",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Full Name Field
+                  Text(
+                    "Full Name",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: controller.fullNameController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: "Enter your full name",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                      ),
+                      filled: true,
+                      fillColor: cardColor.withOpacity(0.8),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your full name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Email Field
+                  Text(
+                    "Email",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: controller.emailController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: "Enter your email",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                      ),
+                      filled: true,
+                      fillColor: cardColor.withOpacity(0.8),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!value.contains('@')) {
+                        return 'Please enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Phone Field
+                  Text(
+                    "Phone",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: controller.phoneController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: "Enter your phone number",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                      ),
+                      filled: true,
+                      fillColor: cardColor.withOpacity(0.8),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your phone number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: primaryColor),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            "Cancel",
+                            style: TextStyle(
+                              color: primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Obx(() => ElevatedButton(
+                          onPressed: controller.isProfileLoading.value
+                              ? null
+                              : () => controller.updateAdminProfile().then((success) {
+                            if (success) {
+                              Navigator.pop(context);
+                            }
+                          }),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: controller.isProfileLoading.value
+                              ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : const Text(
+                            "Update",
+                            style: TextStyle(
+                              color: Colors.white,
+                            ),
+                          ),
+                        )),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+
 
   String _formatDate(DateTime date) {
     return DateFormat('yyyy-MM-dd').format(date);
